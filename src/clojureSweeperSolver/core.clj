@@ -5,8 +5,9 @@
 (def numbombs 99)
 (def num-to-open (- (* numrows numcols) numbombs))
 
+
 (def server-addr "http://localhost:1337/")
-(def player-id 1)
+(def player-id 602711)
 
 (defn to-int [s]
   (try (Integer/parseInt s) (catch NumberFormatException e nil)))
@@ -41,42 +42,51 @@
   (for [xd (range -1 2) yd (range -1 2)] [(+ yd (first pos)) (+ xd (second pos))])
   )
 
-(defn find-candidates [result opened to-open]
+(defn candidate-neighbours [pos board]
+  (filter #(and 
+    (>= (first %) 0)
+    (< (first %) numrows)
+    (>= (second %) 0)
+    (< (second %) numcols)
+    (= :unknown ((board (first %)) (second %)))
+    ) (neighbours pos))
+  )
+
+(def all-coordinates (for [x (range 0 numcols) y (range 0 numrows)] [y x]))
+
+(defn find-candidates [board]
   (let [cads
-    (if (= 0 (result :count))
-  (filter (fn [candidate] 
-    (not (or 
-      (< (first candidate) 0)
-      (>= (first candidate) numrows)
-      (< (second candidate) 0 )
-      (>= (second candidate) numcols)
-      (contains? (set opened) candidate)
-      (contains? (set to-open) candidate)
-    )))
-    (neighbours (result :pos)))
-  []
-  )]
+    (reduce concat
+    (map #(candidate-neighbours % board)
+    (filter (fn [pos] (= 0 ((board (first pos)) (second pos)))) all-coordinates)))
+   ]
   (println "Candidates " cads)
   cads
 ))
 
+(defn calculate-board [board pos newval]
+  (let [y (first pos) x (second pos)]
+  (assoc (vec board) y (assoc (vec ((vec board) y)) x newval)))
+  )
+
+
 (defn ahint [status]
-  (let [result (hint) opened (status :opened) to-open (status :toOpen)]
-    {:opened (cons (result :pos) opened) 
-     :toOpen (concat to-open (find-candidates result (cons (result :pos) opened) to-open))}
+  (let [result (hint)]
+    (let [board (calculate-board (status :board) (result :pos) (result :count))]
+    {:board board
+     :toOpen (find-candidates board)})
 ))
 
 (defn aopen [status]
   (let [result (open (first (status :toOpen)))]
-   (let [opened (cons (result :pos) (status :opened)) to-open (rest (status :toOpen))]
-   {:opened opened
-     :toOpen (concat to-open (find-candidates result opened to-open))}
-  ))
+   (let [board (calculate-board (status :board) (result :pos) (result :count))]
+    {:board board
+     :toOpen (find-candidates board)}))
 )
 
 (defn solve-board [status]
   (cond 
-    (>= (count (status :opened)) num-to-open) status
+    (= (count (filter #(= % :unknown) (reduce concat (status :board)))) numbombs) status
     (not (empty? (status :toOpen))) (solve-board (aopen status))
     :else (solve-board (ahint status)))
   )
@@ -85,5 +95,5 @@
   "I don't do a whole lot."
   [& args]
   (println "Hello, World!")
-  (solve-board {:opened [] :toOpen {}})
+  (solve-board {:toOpen {} :board (vec (repeat numrows (vec (repeat numcols :unknown))))})
   )
