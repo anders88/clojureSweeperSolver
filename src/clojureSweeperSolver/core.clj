@@ -6,13 +6,13 @@
 (def num-to-open (- (* numrows numcols) numbombs))
 
 
-(def server-addr "http://localhost:1337/")
-(def player-id 602711)
+(def server-addr "http://www.anderssandbox.com/")
+(def player-id 205411)
 
 (defn to-int [s]
   (try (Integer/parseInt s) (catch NumberFormatException e nil)))
 
-(with-test 
+(with-test
   (defn parse-result [resultstr]
      {:pos [(to-int (second (re-find #"Y=(\d+)" resultstr)))
             (to-int (second (re-find #"X=(\d+)" resultstr)))]
@@ -33,8 +33,8 @@
   (parse-result (do-external (str server-addr "hint?id=" player-id)))
   )
 
-(defn open [pos] 
-  (parse-result (do-external 
+(defn open [pos]
+  (parse-result (do-external
   (str server-addr "open?id=" player-id "&Y=" (first pos) "&X=" (second pos))))
 )
 
@@ -43,7 +43,7 @@
   )
 
 (defn candidate-neighbours [pos board]
-  (filter #(and 
+  (filter #(and
     (>= (first %) 0)
     (< (first %) numrows)
     (>= (second %) 0)
@@ -53,6 +53,10 @@
   )
 
 (def all-coordinates (for [x (range 0 numcols) y (range 0 numrows)] [y x]))
+
+;(def can-open? [x y board]
+;  (= 0 ((board y) x))
+;  )
 
 (defn find-candidates [board]
   (let [cads
@@ -68,6 +72,36 @@
   (let [y (first pos) x (second pos)]
   (assoc (vec board) y (assoc (vec ((vec board) y)) x newval)))
   )
+
+;(defn markBomb? [y x board]
+;  (and (= ((board y) x) :unknown)
+;
+;  )
+
+(defn bombs-to [pos board]
+  (if (= (count (filter
+    #(let [cell ((board (first %)) (second %))]
+     (or (= cell :unknown) (= cell :bomb)))
+           (neighbours pos board))) ((board (first pos)) (second pos)))
+  (candidate-neighbours pos board) []
+  ))
+
+(defn marking [board checklist result]
+  (if
+    (empty? checklist) result
+    (marking (rest checklist) (concat result (bombs-to (first checklist) board)))
+  )
+  )
+
+(with-test
+  (defn mark-bombs [board]
+     (let [bomblist (set (marking board
+     (for [y (vec (range 0 (count board))) x (vec (range 0 (count (board 0))))] [y x])
+     []))]
+     (map (fn [row] (map  (fn [cell] (if (contains? bomblist cell) :bomb cell)) row)) board)
+  ))
+  (is (= [[:bomb 1 0] [1 1 0] [0 0 0]] (mark-bombs [[:unknown 1 0] [1 1 0] [0 0 0]])))
+)
 
 
 (defn ahint [status]
@@ -85,7 +119,7 @@
 )
 
 (defn solve-board [status]
-  (cond 
+  (cond
     (= (count (filter #(= % :unknown) (reduce concat (status :board)))) numbombs) status
     (not (empty? (status :toOpen))) (solve-board (aopen status))
     :else (solve-board (ahint status)))
